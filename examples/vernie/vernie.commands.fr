@@ -1,5 +1,12 @@
 tête droite
 tête gauche
-avant
-arrière
-FIN
+avance
+recule
+tourne
+tourne gauche
+tourne droite
+droite
+gauche
+feu
+dis
+FINI
