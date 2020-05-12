@@ -12,18 +12,22 @@ try:
     import gtts
 
 
-    def say(text):
+    def say(text, language='en'):
         print("%s" % text)
-        if isinstance(text, str):
-            text = text.decode("utf-8")
+        # if isinstance(text, str):
+        #     text = text.decode("utf-8")
         md5 = hashlib.md5(text.encode('utf-8')).hexdigest()
-        fname = "/tmp/%s.mp3" % md5
+        dir_name = os.path.expanduser("~/tmp/vernie_speech/{}".format(language))
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+        fname = "{}/{}.mp3".format(dir_name, md5)
         if not os.path.exists(fname):
-            myre = re.compile('[[A-Za-z]', re.UNICODE)
-            lang = 'en' if myre.match(text) else 'ru'
+            # myre = re.compile('[[A-Za-z]', re.UNICODE)
+            # lang = 'en' if myre.match(text) else 'ru'
+            # lang = 'fr' if myre.match(text) else 'ru'
 
             logging.getLogger('requests').setLevel(logging.getLogger('').getEffectiveLevel())
-            tts = gtts.gTTS(text=text, lang=lang, slow=False)
+            tts = gtts.gTTS(text=text, lang=language, slow=False)
             tts.save(fname)
 
         with open(os.devnull, 'w') as fnull:
@@ -43,7 +47,26 @@ SPEECH_LANG_MAP = {
                          "forward, backward, turn left, turn right, "
                          "head left, head right, head straight, shot and say",
         "finished": "Thank you! Robot is now turning off",
-        "text is empty": "Please, enter not empty text to say!"
+        "text is empty": "Please, enter not empty text to say!",
+        "unknown command": "Unknown command"
+    },
+    'fr': {
+        'ready': "Vernie le robot est prêt.",
+        "commands help": "Les commandes disponibles sont:"
+                         "avance, recule, tourne gauche, tourne droite,"
+                         "tête gauche, tête droite, feu, dis et fini",
+        "finished": "Merci! Le robot s'éteint maintenant",
+        "text is empty": "Veuillez saisir un texte non vide pour le dire!",
+        "unknown command": "Commande non reconnue"
+    },
+    'fr-FR': {
+        'ready': "Vernie le robot est prêt.",
+        "commands help": "Les commandes disponibles sont:"
+                         "avance, recule, tourne gauche, tourne droite,"
+                         "tête gauche, tête droite, feu, dis et fini",
+        "finished": "Merci! Le robot s'éteint maintenant",
+        "text is empty": "Veuillez saisir un texte non vide pour le dire!",
+        "unknown command": "Commande non reconnue"
     },
     "ru": {
         "ready": "Робот Веернии готов к работе",
@@ -54,7 +77,8 @@ SPEECH_LANG_MAP = {
         "finished": "Робот завершает работу. Спасибо!",
         "commands from file": "Исполняю команды из файла",
         "fire": "Выстрел!",
-        "text is empty": "Пожалуйста, наберите не пустой текст!"
+        "text is empty": "Пожалуйста, наберите не пустой текст!",
+        "unknown command": "неизвестная команда"  # FIXME Please confirm translation, as I don't speak Russian
     }
 }
 
@@ -84,7 +108,7 @@ class Vernie(MoveHub):
     def say(self, phrase):
         if phrase in SPEECH_LANG_MAP[self.language]:
             phrase = SPEECH_LANG_MAP[self.language][phrase]
-        say(phrase)
+        say(phrase, self.language)
 
     def _external_motor_data(self, data):
         log.debug("External motor position: %s", data)
@@ -117,58 +141,68 @@ class Vernie(MoveHub):
         self.head(STRAIGHT)
 
     def interpret_command(self, cmd, confirm):
+        if cmd is None:
+            return
         cmd = cmd.strip().lower().split(' ')
-        if cmd[0] in ("head", "голова", "голову"):
-            if cmd[-1] in ("right", "вправо", "направо"):
+        if cmd[0] in ("head", "голова", "голову", "tête"):
+            if cmd[-1] in ("right", "вправо", "направо", "droite"):
                 confirm(cmd)
                 self.head(RIGHT)
-            elif cmd[-1] in ("left", "влево", "налево"):
+            elif cmd[-1] in ("left", "влево", "налево", "gauche"):
                 confirm(cmd)
                 self.head(LEFT)
             else:
                 confirm(cmd)
                 self.head(STRAIGHT)
-        elif cmd[0] in ("say", "скажи", "сказать"):
+        elif cmd[0] in ("say", "скажи", "сказать", "dis"):
             if not cmd[1:]:
                 self.say("text is empty")
                 return
-            say(' '.join(cmd[1:]))
-        elif cmd[0] in ("fire", "shot", "огонь", "выстрел"):
-            say("fire")
+            self.say(phrase=' '.join(cmd[1:]))
+        elif cmd[0] in ("fire", "shot", "огонь", "выстрел", "feu"):
+            self.say(phrase=cmd)
             self.shot()
-        elif cmd[0] in ("end", "finish", "конец", "стоп"):
-            self.say("finished")
+        elif cmd[0] in ("end", "finish", "конец", "стоп", "fini"):
+            self.say(phrase="finished")
             raise KeyboardInterrupt()
-        elif cmd[0] in ("forward", "вперёд", "вперед"):
+        elif cmd[0] in ("forward", "вперёд", "вперед", "avance"):
             try:
                 dist = int(cmd[-1])
             except BaseException:
                 dist = 1
             confirm(cmd)
             self.move(FORWARD, distance=dist)
-        elif cmd[0] in ("backward", "назад"):
+        elif cmd[0] in ("backward", "назад", "recule"):
             try:
                 dist = int(cmd[-1])
             except BaseException:
                 dist = 1
             confirm(cmd)
             self.move(BACKWARD, distance=dist)
-        elif cmd[0] in ("turn", "поворот", 'повернуть'):
-            if cmd[-1] in ("right", "вправо", "направо"):
+        elif cmd[0] in ("turn", "поворот", 'повернуть', "tourne"):
+            if cmd[-1] in ("right", "вправо", "направо", "droite"):
                 confirm(cmd)
                 self.turn(RIGHT)
-            elif cmd[-1] in ("left", "влево", "налево"):
+            elif cmd[-1] in ("left", "влево", "налево", "gauche"):
                 confirm(cmd)
                 self.turn(LEFT)
             else:
                 confirm(cmd)
                 self.turn(RIGHT, degrees=180)
-        elif cmd[0] in ("right", "вправо", "направо"):
+        elif cmd[0] in ("right", "вправо", "направо", "droite"):
+            try:
+                angle = int(cmd[-1])
+            except BaseException:
+                angle = 90
             confirm(cmd)
-            self.turn(RIGHT)
-        elif cmd[0] in ("left", "влево", "налево"):
+            self.turn(RIGHT, degrees=angle)
+        elif cmd[0] in ("left", "влево", "налево", "gauche"):
+            try:
+                angle = int(cmd[-1])
+            except BaseException:
+                angle = 90
             confirm(cmd)
-            self.turn(LEFT)
+            self.turn(LEFT, degrees=angle)
         elif cmd[0]:
-            self.say("Unknown command")
-            self.say("commands help")
+            self.say("unknown command")
+            # self.say("commands help")
